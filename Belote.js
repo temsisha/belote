@@ -90,6 +90,52 @@ export default class Belote {
       return this.getState();
     }
 
+    // ❗ OBAVEZNA BOJA / SEČENJE
+    if (this.table.length > 0) {
+      const leadSuit = this.getCardSuit(this.table[0].card);
+      const playedSuit = this.getCardSuit(card);
+
+      // ima boju, a ne prati je
+      if (this.hasSuit(player, leadSuit) && playedSuit !== leadSuit) {
+        return this.getState();
+      }
+
+      // nema boju, ali ima adut → mora da seče
+      if (
+        !this.hasSuit(player, leadSuit) &&
+        this.hasTrump(player) &&
+        playedSuit !== this.trump
+      ) {
+        return this.getState();
+      }
+    }
+
+    // ❗ NADSECANJE
+    if (this.table.length > 0) {
+      const leadSuit = this.getCardSuit(this.table[0].card);
+      const playedSuit = this.getCardSuit(card);
+
+      const strongestTrump = this.getStrongestTrumpOnTable();
+
+      // štih je već presečen
+      if (
+        strongestTrump &&
+        playedSuit === this.trump
+      ) {
+        // igrač ima jači adut
+        const hasStrongerTrump = this.hands[player].some(c =>
+          this.getCardSuit(c) === this.trump &&
+          this.getTrumpStrength(c) > this.getTrumpStrength(strongestTrump)
+        );
+
+        if (hasStrongerTrump &&
+          this.getTrumpStrength(card) <= this.getTrumpStrength(strongestTrump)) {
+          return this.getState(); // ❌ mora jači
+        }
+      }
+    }
+
+
     // 1️⃣ ukloni kartu iz ruke
     this.hands[player] = this.hands[player].filter((c) => c !== card);
 
@@ -115,7 +161,7 @@ export default class Belote {
 
     let strongest = this.table[0];
     let strongestValue = this.getCardStrength(strongest.card, leadSuit);
-  
+
     for (let i = 1; i < this.table.length; i++) {
       const entry = this.table[i];
       const value = this.getCardStrength(entry.card, leadSuit);
@@ -144,6 +190,18 @@ export default class Belote {
     return { rank, suit };
   }
 
+  getCardSuit(card) {
+    return card.slice(-1);
+  }
+
+  hasSuit(player, suit) {
+    return this.hands[player].some(card => this.getCardSuit(card) === suit);
+  }
+
+  hasTrump(player) {
+    return this.hands[player].some(card => this.getCardSuit(card) === this.trump);
+  }
+
   getCardStrength(card, leadSuit) {
     const { rank, suit } = this.getCardRank(card);
 
@@ -162,6 +220,26 @@ export default class Belote {
 
     // ostalo
     return 0;
+  }
+
+  getTrumpStrength(card) {
+    const order = ["J", "9", "A", "10", "K", "Q", "8", "7"];
+    const rank = card.slice(0, -1);
+    return order.length - order.indexOf(rank);
+  }
+
+  getStrongestTrumpOnTable() {
+    const trumps = this.table
+      .filter(e => this.getCardSuit(e.card) === this.trump)
+      .map(e => e.card);
+
+    if (trumps.length === 0) return null;
+
+    return trumps.reduce((strongest, card) => {
+      return this.getTrumpStrength(card) > this.getTrumpStrength(strongest)
+        ? card
+        : strongest;
+    });
   }
 
   getState() {
@@ -184,17 +262,22 @@ export default class Belote {
 
 
 const belote = new Belote();
-belote.startGame();
-belote.selectTrump("♠");
 
-// ručno nameštamo sto za test
+// minimalni init
+belote.startGame();
+belote.trump = "♠"; // ručno postavljamo adut za test
+console.log("=== SCENARIO 3: SLOBODAN POTEZ ===");
+
 belote.table = [
-  { player: "YOU", card: "10♥" },
-  { player: "P2",  card: "A♥" },
-  { player: "P3",  card: "9♠" },  // adut
-  { player: "P4",  card: "K♥" }
+  { player: "P2", card: "10♥" }
 ];
 
-belote.resolveTrick();
+belote.currentPlayer = belote.players.indexOf("YOU");
 
-console.log("POBEDNIK:", belote.players[belote.currentPlayer]); // P3
+belote.hands["YOU"] = ["A♣", "10♣"];
+
+console.log("PRE:", belote.getState());
+
+belote.playCard("YOU", "A♣"); // ✅ SME
+
+console.log("POSLE:", belote.getState());
